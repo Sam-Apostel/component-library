@@ -186,11 +186,3 @@ function useTimeLineItems() {
 	const [items] = useContext(TimelineContext);
 	return Array.from(items.keys());
 }
-
-/*
-For years I have been collecting ui examples that spark joy. 
-Twitter, Pinterest, Dribbble, screenshot on my phone or computer. I never find what I'm looking for.
-That's why I decided to start recreating them in a central storybook.
-
-First up, @natkohasic's timeline.
-*/
