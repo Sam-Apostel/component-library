@@ -22,7 +22,7 @@ const preview: Preview = {
 				},
 				{
 					name: 'dark',
-					value: 'var(--color-zinc-800)',
+					value: '#121213',
 				},
 			],
 		},

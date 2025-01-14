@@ -93,7 +93,7 @@ export function TimelineItem({
 
 	return (
 		<div
-			className="rounded-xs col-span-6 col-start-3 row-start-2 m-[3px] flex cursor-grab items-center border-2 border-white bg-[#e3e8ec88] px-1 shadow-inner shadow-lg backdrop-blur-sm active:cursor-grabbing"
+			className="rounded-xs col-span-6 col-start-3 row-start-2 m-[3px] flex cursor-grab items-center border-2 border-white/70 bg-[#e3e8ec88] px-1 shadow-inner shadow-lg backdrop-blur-sm active:cursor-grabbing"
 			style={{
 				gridColumn: `${column} / span ${span}`,
 				gridRowStart: row,

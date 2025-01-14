@@ -29,7 +29,7 @@ export default function CircularProgress({
 	const radius = (size - Math.max(gutter, stroke)) / 2;
 	const circumference = 2 * Math.PI * radius;
 	const clampedProgress = Math.min(Math.max(progress, 0), 100);
-
+	
 	return (
 		<div
 			className="relative grid place-items-center font-mono text-xs font-bold tabular-nums"
