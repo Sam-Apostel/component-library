@@ -250,17 +250,17 @@ export default function TableActionBar() {
 					</span>
 					selected
 				</ActionBarItem>
-				<Popover>
-					<PopoverTrigger>
-						<ActionBarButton>
-							<EditStatusIcon className="size-4" />
-							Change status
-						</ActionBarButton>
-					</PopoverTrigger>
-					<PopoverContent>
-						<div></div>
-					</PopoverContent>
-				</Popover>
+				{/*<Popover>*/}
+				{/*	<PopoverTrigger>*/}
+				<ActionBarButton>
+					<EditStatusIcon className="size-4" />
+					Change status
+				</ActionBarButton>
+				{/*</PopoverTrigger>*/}
+				{/*<PopoverContent>*/}
+				{/*	<div></div>*/}
+				{/*</PopoverContent>*/}
+				{/*</Popover>*/}
 				<ActionBarButton>
 					<DuplicateIcon className="size-4" />
 					Duplicate
@@ -277,22 +277,22 @@ export default function TableActionBar() {
 		</div>
 	);
 }
-
-function Popover({ children }: PropsWithChildren) {
-	return <>{children}</>;
-}
-
-function PopoverTrigger({ children }: PropsWithChildren) {
-	return <>{children}</>;
-}
-
-function PopoverContent({ children }: PropsWithChildren) {
-	return (
-		<div className="bg-dg-700 fixed flex h-12 self-center overflow-hidden rounded-md border border-gray-500/50 ring shadow-xl ring-black/50">
-			{children}
-		</div>
-	);
-}
+//
+// function Popover({ children }: PropsWithChildren) {
+// 	return <>{children}</>;
+// }
+//
+// function PopoverTrigger({ children }: PropsWithChildren) {
+// 	return <>{children}</>;
+// }
+//
+// function PopoverContent({ children }: PropsWithChildren) {
+// 	return (
+// 		<div className="bg-dg-700 fixed flex h-12 self-center overflow-hidden rounded-md border border-gray-500/50 ring shadow-xl ring-black/50">
+// 			{children}
+// 		</div>
+// 	);
+// }
 
 function IconButton({ className, ...props }: ComponentProps<'button'>) {
 	return (
