@@ -24,6 +24,10 @@ const preview: Preview = {
 					name: 'dark',
 					value: '#121213',
 				},
+				{
+					name: 'dark-gray',
+					value: '#1c1f24',
+				},
 			],
 		},
 	},
