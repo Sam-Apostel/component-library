@@ -12,18 +12,23 @@ import { cn } from '../../util.ts'
 
 export default function EmptyState() {
 	return (
-		<div className="grid md:grid-cols-2 gap-4 items-center ">
-			<ProjectCard />
-			<RoutingCard />
-			<FiltersCard />
-			<RoutingErrorCard />
+		<div className="grid md:grid-cols-2 gap-4 ">
+			<ProjectCard className="self-end" />
+			<RoutingCard className="self-end" />
+			<FiltersCard className="self-start" />
+			<RoutingErrorCard className="self-start" />
 		</div>
 	)
 }
 
-function FiltersCard() {
+function FiltersCard({ className }: { className?: string }) {
 	return (
-		<div className="flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-12 pb-4 border-sky-600/20 overflow-clip">
+		<div
+			className={cn(
+				'flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-10 pb-4 border-sky-600/20 overflow-clip',
+				className,
+			)}
+		>
 			<h3 className="text-sky-900/80 text-sm font-medium">
 				The filters you chose don't match any orders.
 			</h3>
@@ -57,9 +62,14 @@ function FiltersCard() {
 	)
 }
 
-function RoutingErrorCard() {
+function RoutingErrorCard({ className }: { className?: string }) {
 	return (
-		<div className="flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-12 pb-4 border-red-600/20 overflow-clip">
+		<div
+			className={cn(
+				'flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-10 pb-4 border-red-600/20 overflow-clip',
+				className,
+			)}
+		>
 			<h3 className="text-red-600/80 text-sm font-medium">
 				The routing service is currently unavailable.
 			</h3>
@@ -124,9 +134,14 @@ function RoutingErrorCard() {
 	)
 }
 
-function RoutingCard() {
+function RoutingCard({ className }: { className?: string }) {
 	return (
-		<div className="flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-12 pb-4 border-sky-600/20 overflow-clip">
+		<div
+			className={cn(
+				'flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-10 pb-4 border-sky-600/20 overflow-clip',
+				className,
+			)}
+		>
 			<h3 className="text-sky-900/80 text-sm font-medium">
 				You don't have any routings yet.
 			</h3>
@@ -187,9 +202,14 @@ function RoutingCard() {
 	)
 }
 
-function ProjectCard() {
+function ProjectCard({ className }: { className?: string }) {
 	return (
-		<div className="flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-12 pb-4 border-sky-600/20 overflow-clip">
+		<div
+			className={cn(
+				'flex flex-col gap-4 items-center border border-dashed rounded-lg px-6 pt-10 pb-4 border-sky-600/20 overflow-clip',
+				className,
+			)}
+		>
 			<div className="cards relative my-20 mx-40">
 				<div className="absolute -translate-1/2 h-30 w-90 bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] inset-shadow-white inset-shadow-10xl rounded-full" />
 				<Card
