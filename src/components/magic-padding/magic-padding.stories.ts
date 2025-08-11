@@ -6,9 +6,11 @@ const meta = {
 	component: Component,
 	parameters: {
 		layout: 'centered',
+	},
+	globals: {
 		backgrounds: {
-			default: 'dark'
-		}
+			value: 'dark',
+		},
 	},
 	tags: ['autodocs'],
 	argTypes: {

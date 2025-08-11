@@ -10,26 +10,28 @@ const preview: Preview = {
 			},
 		},
 		backgrounds: {
-			default: 'cool',
-			values: [
-				{
+			options: {
+				cool: {
 					name: 'cool',
 					value: 'var(--color-slate-200)',
 				},
-				{
+				white: {
 					name: 'white',
 					value: '#fff',
 				},
-				{
+				dark: {
 					name: 'dark',
 					value: '#121213',
 				},
-				{
+				'dark-gray': {
 					name: 'dark-gray',
 					value: '#1c1f24',
 				},
-			],
+			},
 		},
+	},
+	initialGlobals: {
+		backgrounds: { value: 'cool' },
 	},
 };
 
