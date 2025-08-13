@@ -381,6 +381,9 @@ function ZoomWidget() {
 	const zoom = use(zoomContext);
 	const setZoom = use(setZoomContext);
 
+	// TODO: correct position after zoom
+	// TODO: zoom to fit based on node positions and viewport size
+
 	return (
 		<div className="flex gap-2 items-center">
 			<div className="flex gap-2 items-center">
