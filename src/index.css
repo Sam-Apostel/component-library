@@ -1,6 +1,9 @@
-@import 'tailwindcss';
+@import url("https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,100..900&display=swap");
+@import "tailwindcss";
 
 @theme {
+	--radius-2xl: 1.5rem;
+	--radius-xl: 1.25rem;
 	--radius-lg: 1rem;
 	--radius-md: 0.75rem;
 	--radius-sm: 0.5rem;
@@ -8,6 +11,5 @@
 
 	--color-dg-700: #24272c;
 	--color-dg-600: #34373b;
-
-
+	--font-big-shoulders: "Big Shoulders", sans-serif;
 }
