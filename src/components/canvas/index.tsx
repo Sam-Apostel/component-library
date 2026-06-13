@@ -10,45 +10,64 @@ import {
 	PlusIcon,
 	TrashIcon,
 } from 'lucide-react';
-import { Dispatch, SetStateAction, use, useCallback, useState } from 'react';
+import {
+	Dispatch,
+	SetStateAction,
+	use,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from 'react';
 import { Button } from './button.tsx';
 import {
 	CanvasProvider,
+	cameraContext,
+	MAX_ZOOM,
+	MIN_ZOOM,
 	type Node,
 	NodeDefinition,
 	nodesContext,
 	selectedNodeContext,
 	setSelectedNodeContext,
-	setZoomContext,
-	zoomContext,
 } from './contexts.tsx';
-import { useDragProps } from './drag-and-drop.ts';
+import { useDragProps, usePanProps } from './drag-and-drop.ts';
 import { latestDefinitions, NodesCatalog } from './nodes-catalog.tsx';
 
 export default function CanvasUi() {
 	return (
 		<CanvasProvider>
-			<div className="w-full h-screen relative overflow-hidden">
-				<Canvas />
-				<aside className="absolute right-2 inset-y-2 flex flex-col gap-2">
-					<div className="flex items-center gap-2">
-						<Button variant="primary" className="flex-1">
-							Save
-						</Button>
-						<Button
-							variant="secondary"
-							className="aspect-square px-0"
-						>
-							<EyeIcon className="size-4" />
-						</Button>
-					</div>
-					<NodesCatalog />
-					<OperationParameters />
-					<Minimap />
-					<ZoomWidget />
-				</aside>
-			</div>
+			<CanvasLayout />
 		</CanvasProvider>
+	);
+}
+
+function CanvasLayout() {
+	const { viewportRef, sidebarRef } = use(cameraContext);
+	return (
+		<div
+			ref={viewportRef}
+			className="w-full h-screen relative overflow-hidden"
+		>
+			<Canvas />
+			<aside
+				ref={sidebarRef}
+				className="absolute right-2 inset-y-2 flex flex-col gap-2"
+			>
+				<div className="flex items-center gap-2">
+					<Button variant="primary" className="flex-1">
+						Save
+					</Button>
+					<Button variant="secondary" className="aspect-square px-0">
+						<EyeIcon className="size-4" />
+					</Button>
+				</div>
+				<NodesCatalog />
+				<OperationParameters />
+				<Minimap />
+				<ZoomWidget />
+			</aside>
+		</div>
 	);
 }
 
@@ -277,53 +296,52 @@ function UpgradeSideBar({
 }
 
 function Canvas() {
-	const zoom = use(zoomContext);
-	const setZoom = use(setZoomContext);
+	const { camera, zoomAtPoint, panBy } = use(cameraContext);
 	const setSelectedNode = use(setSelectedNodeContext);
-	const [position, setPosition] = useState<[number, number]>([0, 0]);
-
-	const dragProps = useDragProps(setPosition, zoom);
-
 	const { nodes } = use(nodesContext);
+	const canvasRef = useRef<HTMLDivElement>(null);
+
+	const panProps = usePanProps(panBy);
+
+	// Use a native, non-passive listener so we can prevent the browser's
+	// own page/pinch zoom and own the wheel gesture entirely.
+	useEffect(() => {
+		const element = canvasRef.current;
+		if (!element) return;
+
+		const onWheel = (e: WheelEvent) => {
+			e.preventDefault();
+			const rect = element.getBoundingClientRect();
+			// Normalise line-based deltas (Firefox) to pixels.
+			const delta = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+			// Exponential so each unit scrolled feels proportional at every
+			// zoom level. Scrolling down (delta > 0) zooms out.
+			const factor = Math.exp(-delta * 0.0015);
+			zoomAtPoint(factor, {
+				x: e.clientX - rect.left,
+				y: e.clientY - rect.top,
+			});
+		};
+
+		element.addEventListener('wheel', onWheel, { passive: false });
+		return () => element.removeEventListener('wheel', onWheel);
+	}, [zoomAtPoint]);
+
 	return (
 		<div
-			className="absolute cursor-grab active:cursor-grabbing -inset-4 bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
+			ref={canvasRef}
+			className="absolute inset-0 cursor-grab active:cursor-grabbing bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)]"
 			style={{
-				zoom: zoom / 100,
-				translate: `${position[0] % 16}px ${position[1] % 16}px`,
+				backgroundSize: `${16 * camera.zoom}px ${16 * camera.zoom}px`,
+				backgroundPosition: `${camera.x}px ${camera.y}px`,
 			}}
-			{...dragProps}
+			{...panProps}
 			onClick={() => setSelectedNode(null)}
-			onWheel={(e) => {
-				const mousePos = {
-					x: e.clientX / (zoom / 100),
-					y: e.clientY / (zoom / 100),
-				};
-				// find mouse position relative to canvas
-				setZoom((zoom) => {
-					const newZoom = Math.max(
-						20,
-						Math.min(150, zoom + e.deltaY),
-					);
-
-					setPosition((position) => [
-						position[0] +
-							mousePos.x -
-							(newZoom / zoom) * mousePos.x,
-						position[1] +
-							mousePos.y -
-							(newZoom / zoom) * mousePos.y,
-					]);
-
-					return newZoom;
-				});
-				// restore mouse position relative to canvas
-			}}
 		>
 			<div
-				className="relative"
+				className="absolute top-0 left-0 origin-top-left"
 				style={{
-					translate: `${position[0] - (position[0] % 16)}px ${position[1] - (position[1] % 16)}px`,
+					transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
 				}}
 			>
 				{nodes?.map((node) => (
@@ -335,7 +353,7 @@ function Canvas() {
 }
 
 function Node({ id, definition, position }: Node) {
-	const zoom = use(zoomContext);
+	const { camera } = use(cameraContext);
 	const setSelectedNode = use(setSelectedNodeContext);
 	const { setNodes } = use(nodesContext);
 	const setPosition = useCallback<Dispatch<SetStateAction<[number, number]>>>(
@@ -356,10 +374,11 @@ function Node({ id, definition, position }: Node) {
 		[setNodes, id],
 	);
 
-	const dragProps = useDragProps(setPosition, zoom);
+	const dragProps = useDragProps(setPosition, camera.zoom);
 
 	return (
 		<div
+			data-node-id={id}
 			className="active:z-100 absolute flex items-center px-4 text-gray-500 border gap-6 h-12 border-gray-400/30 bg-white rounded-sm justify-between select-none"
 			style={{
 				left: position[0],
@@ -377,19 +396,20 @@ function Node({ id, definition, position }: Node) {
 	);
 }
 
-function ZoomWidget() {
-	const zoom = use(zoomContext);
-	const setZoom = use(setZoomContext);
+// Each step multiplies the zoom by this factor so the buttons feel
+// proportional at every zoom level.
+const ZOOM_STEP = 1.2;
 
-	// TODO: correct position after zoom
-	// TODO: zoom to fit based on node positions and viewport size
+function ZoomWidget() {
+	const { camera, zoomBySelection, setZoom } = use(cameraContext);
+	const percent = Math.round(camera.zoom * 100);
 
 	return (
 		<div className="flex gap-2 items-center">
 			<div className="flex gap-2 items-center">
 				<button
-					onClick={() => setZoom((z) => z - 10)}
-					disabled={zoom <= 20}
+					onClick={() => zoomBySelection(1 / ZOOM_STEP)}
+					disabled={camera.zoom <= MIN_ZOOM}
 					className="disabled:opacity-50 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 border border-gray-400/30 bg-white rounded-sm h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<MinusIcon className="size-4" />
@@ -397,14 +417,14 @@ function ZoomWidget() {
 				<div className="flex gap-2 border border-gray-400/30 bg-white rounded-sm h-10 pl-2 pr-3 items-center text-sm text-gray-500">
 					<input
 						className="w-8 text-right"
-						value={zoom}
-						onChange={(e) => setZoom(+e.target.value)}
+						value={percent}
+						onChange={(e) => setZoom(+e.target.value / 100)}
 					/>
 					%
 				</div>
 				<button
-					onClick={() => setZoom((z) => z + 10)}
-					disabled={zoom >= 150}
+					onClick={() => zoomBySelection(ZOOM_STEP)}
+					disabled={camera.zoom >= MAX_ZOOM}
 					className="disabled:opacity-50 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 border border-gray-400/30 bg-white rounded-sm h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<PlusIcon className="size-4" />
@@ -413,15 +433,15 @@ function ZoomWidget() {
 
 			<div className="flex border border-gray-400/30 bg-white rounded-sm  items-center overflow-clip">
 				<button
-					onClick={() => setZoom(100)}
-					aria-checked={zoom === 100 ? true : undefined}
+					onClick={() => setZoom(1)}
+					aria-checked={percent === 100 ? true : undefined}
 					className="bg-white aria-checked:bg-blue-800/10 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<MaximizeIcon className="size-4" />
 				</button>
 				<button
-					onClick={() => setZoom(75)}
-					aria-checked={zoom === 75 ? true : undefined}
+					onClick={() => setZoom(0.75)}
+					aria-checked={percent === 75 ? true : undefined}
 					className="bg-white aria-checked:bg-blue-800/10 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<FullscreenIcon className="size-4" />
