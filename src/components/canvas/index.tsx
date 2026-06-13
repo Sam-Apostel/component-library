@@ -310,8 +310,11 @@ function Canvas() {
 	// Mouse wheel, trackpad pinch/swipe and touch gestures.
 	useCanvasGestures(canvasRef, zoomAtPoint, panBy);
 
-	// One grid tile in viewport pixels.
+	// One grid tile in viewport pixels. The grid layer is inset by the largest
+	// possible tile so its size never changes (only its transform does), letting
+	// the compositor slide a cached bitmap instead of relayouting/repainting.
 	const tile = 16 * camera.zoom;
+	const gridMargin = 16 * MAX_ZOOM;
 
 	return (
 		<div
@@ -321,24 +324,26 @@ function Canvas() {
 			onClick={() => setSelectedNode(null)}
 		>
 			{/*
-			 * Dotted grid on its own transform layer so it pans in lockstep
-			 * with the nodes (GPU-composited, no per-frame repaint). The pattern
-			 * is periodic, so translating by the pan offset modulo one tile
-			 * reproduces an infinite grid while keeping the transform tiny; the
-			 * layer is inset by a tile on every side so the edges never gap.
+			 * Dotted grid on its own composited layer so it pans in lockstep
+			 * with the nodes. The pattern is periodic, so translating by the pan
+			 * offset modulo one tile reproduces an infinite grid with a tiny,
+			 * cheap transform. `will-change` keeps the dots rasterised once and
+			 * merely slid by the compositor (no per-frame repaint => no shimmer).
 			 */}
 			<div
 				className="absolute pointer-events-none bg-[radial-gradient(#e5e7eb_1px,transparent_1px)]"
 				style={{
-					inset: `${-tile}px`,
+					inset: `${-gridMargin}px`,
 					backgroundSize: `${tile}px ${tile}px`,
 					transform: `translate(${camera.x % tile}px, ${camera.y % tile}px)`,
+					willChange: 'transform',
 				}}
 			/>
 			<div
 				className="absolute top-0 left-0 origin-top-left"
 				style={{
 					transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
+					willChange: 'transform',
 				}}
 			>
 				{nodes?.map((node) => (
