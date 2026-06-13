@@ -310,17 +310,31 @@ function Canvas() {
 	// Mouse wheel, trackpad pinch/swipe and touch gestures.
 	useCanvasGestures(canvasRef, zoomAtPoint, panBy);
 
+	// One grid tile in viewport pixels.
+	const tile = 16 * camera.zoom;
+
 	return (
 		<div
 			ref={canvasRef}
-			className="absolute inset-0 cursor-grab active:cursor-grabbing bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)]"
-			style={{
-				backgroundSize: `${16 * camera.zoom}px ${16 * camera.zoom}px`,
-				backgroundPosition: `${camera.x}px ${camera.y}px`,
-			}}
+			className="absolute inset-0 cursor-grab active:cursor-grabbing bg-white"
 			{...panProps}
 			onClick={() => setSelectedNode(null)}
 		>
+			{/*
+			 * Dotted grid on its own transform layer so it pans in lockstep
+			 * with the nodes (GPU-composited, no per-frame repaint). The pattern
+			 * is periodic, so translating by the pan offset modulo one tile
+			 * reproduces an infinite grid while keeping the transform tiny; the
+			 * layer is inset by a tile on every side so the edges never gap.
+			 */}
+			<div
+				className="absolute pointer-events-none bg-[radial-gradient(#e5e7eb_1px,transparent_1px)]"
+				style={{
+					inset: `${-tile}px`,
+					backgroundSize: `${tile}px ${tile}px`,
+					transform: `translate(${camera.x % tile}px, ${camera.y % tile}px)`,
+				}}
+			/>
 			<div
 				className="absolute top-0 left-0 origin-top-left"
 				style={{
