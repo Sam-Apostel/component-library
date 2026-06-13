@@ -15,7 +15,6 @@ import {
 	SetStateAction,
 	use,
 	useCallback,
-	useEffect,
 	useRef,
 	useState,
 } from 'react';
@@ -31,7 +30,11 @@ import {
 	selectedNodeContext,
 	setSelectedNodeContext,
 } from './contexts.tsx';
-import { useDragProps, usePanProps } from './drag-and-drop.ts';
+import {
+	useCanvasGestures,
+	useDragProps,
+	usePanProps,
+} from './drag-and-drop.ts';
 import { latestDefinitions, NodesCatalog } from './nodes-catalog.tsx';
 
 export default function CanvasUi() {
@@ -303,29 +306,8 @@ function Canvas() {
 
 	const panProps = usePanProps(panBy);
 
-	// Use a native, non-passive listener so we can prevent the browser's
-	// own page/pinch zoom and own the wheel gesture entirely.
-	useEffect(() => {
-		const element = canvasRef.current;
-		if (!element) return;
-
-		const onWheel = (e: WheelEvent) => {
-			e.preventDefault();
-			const rect = element.getBoundingClientRect();
-			// Normalise line-based deltas (Firefox) to pixels.
-			const delta = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
-			// Exponential so each unit scrolled feels proportional at every
-			// zoom level. Scrolling down (delta > 0) zooms out.
-			const factor = Math.exp(-delta * 0.0015);
-			zoomAtPoint(factor, {
-				x: e.clientX - rect.left,
-				y: e.clientY - rect.top,
-			});
-		};
-
-		element.addEventListener('wheel', onWheel, { passive: false });
-		return () => element.removeEventListener('wheel', onWheel);
-	}, [zoomAtPoint]);
+	// Mouse wheel, trackpad pinch/swipe and touch gestures.
+	useCanvasGestures(canvasRef, zoomAtPoint, panBy);
 
 	return (
 		<div

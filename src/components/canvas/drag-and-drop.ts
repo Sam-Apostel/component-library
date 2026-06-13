@@ -1,8 +1,10 @@
 import {
 	Dispatch,
 	MouseEventHandler,
+	RefObject,
 	SetStateAction,
 	useCallback,
+	useEffect,
 } from 'react';
 
 // Drag a node around the canvas. Movement is in viewport pixels, so it is
@@ -68,4 +70,133 @@ export function usePanProps(panBy: (dx: number, dy: number) => void) {
 	return {
 		onMouseDown,
 	};
+}
+
+type Point = { x: number; y: number };
+type ZoomAtPoint = (factor: number, anchor: Point) => void;
+type PanBy = (dx: number, dy: number) => void;
+
+// Exponential sensitivities so a given gesture feels proportional at any zoom
+// level. Pinch deltas are much smaller than mouse-wheel notches, hence two
+// constants.
+const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+const PINCH_ZOOM_SENSITIVITY = 0.01;
+
+// Classic mouse wheels deliver large, stepped, vertical-only deltas; trackpads
+// deliver small/fractional deltas and often a horizontal component. This is a
+// best-effort guess (the two are not reliably distinguishable).
+function isTrackpadPan(e: WheelEvent) {
+	if (e.deltaMode !== 0) return false; // line/page deltas => mouse wheel
+	if (e.deltaX !== 0) return true; // horizontal scroll => trackpad
+	if (!Number.isInteger(e.deltaY)) return true; // fractional => trackpad
+	return Math.abs(e.deltaY) < 40; // small steps => trackpad inertia
+}
+
+type Gesture = { x: number; y: number; distance: number };
+
+// Midpoint and finger spread of the active touches. Distance is 0 for a single
+// touch (pan only).
+function readTouches(touches: TouchList): Gesture {
+	const a = touches[0];
+	const b = touches[1];
+	if (!b) return { x: a.clientX, y: a.clientY, distance: 0 };
+	return {
+		x: (a.clientX + b.clientX) / 2,
+		y: (a.clientY + b.clientY) / 2,
+		distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+	};
+}
+
+// Wire up wheel, trackpad and touch gestures on the canvas element:
+//   - mouse wheel               -> zoom around the cursor
+//   - trackpad pinch            -> zoom around the cursor
+//   - trackpad two-finger swipe -> pan
+//   - touch one finger          -> pan
+//   - touch two fingers         -> pinch zoom (and drag to pan)
+// Listeners are attached natively and non-passively so we can take over the
+// gesture from the browser's own page/pinch zoom and scrolling.
+export function useCanvasGestures(
+	ref: RefObject<HTMLElement | null>,
+	zoomAtPoint: ZoomAtPoint,
+	panBy: PanBy,
+) {
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+
+		const toLocal = (clientX: number, clientY: number): Point => {
+			const rect = element.getBoundingClientRect();
+			return { x: clientX - rect.left, y: clientY - rect.top };
+		};
+
+		const onWheel = (e: WheelEvent) => {
+			e.preventDefault();
+
+			// Trackpad pinch and ctrl/⌘ + scroll arrive with ctrlKey set.
+			if (e.ctrlKey) {
+				zoomAtPoint(
+					Math.exp(-e.deltaY * PINCH_ZOOM_SENSITIVITY),
+					toLocal(e.clientX, e.clientY),
+				);
+				return;
+			}
+
+			// Two-finger swipe on a trackpad pans the canvas.
+			if (isTrackpadPan(e)) {
+				panBy(-e.deltaX, -e.deltaY);
+				return;
+			}
+
+			// Classic mouse wheel zooms around the cursor.
+			const delta = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+			zoomAtPoint(
+				Math.exp(-delta * WHEEL_ZOOM_SENSITIVITY),
+				toLocal(e.clientX, e.clientY),
+			);
+		};
+
+		let previous: Gesture | null = null;
+
+		const onTouchStart = (e: TouchEvent) => {
+			previous = readTouches(e.touches);
+		};
+
+		const onTouchMove = (e: TouchEvent) => {
+			if (!previous) return;
+			e.preventDefault();
+			const current = readTouches(e.touches);
+
+			if (e.touches.length >= 2 && previous.distance > 0) {
+				zoomAtPoint(
+					current.distance / previous.distance,
+					toLocal(current.x, current.y),
+				);
+			}
+			// One finger drags, two fingers move the pinch midpoint: both pan.
+			panBy(current.x - previous.x, current.y - previous.y);
+			previous = current;
+		};
+
+		const onTouchEnd = (e: TouchEvent) => {
+			// Re-baseline when the finger count changes (so lifting one finger of
+			// a pinch doesn't jump), and clear once everything is lifted.
+			previous = e.touches.length > 0 ? readTouches(e.touches) : null;
+		};
+
+		element.addEventListener('wheel', onWheel, { passive: false });
+		element.addEventListener('touchstart', onTouchStart, {
+			passive: false,
+		});
+		element.addEventListener('touchmove', onTouchMove, { passive: false });
+		element.addEventListener('touchend', onTouchEnd);
+		element.addEventListener('touchcancel', onTouchEnd);
+
+		return () => {
+			element.removeEventListener('wheel', onWheel);
+			element.removeEventListener('touchstart', onTouchStart);
+			element.removeEventListener('touchmove', onTouchMove);
+			element.removeEventListener('touchend', onTouchEnd);
+			element.removeEventListener('touchcancel', onTouchEnd);
+		};
+	}, [ref, zoomAtPoint, panBy]);
 }
