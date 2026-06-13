@@ -34,6 +34,7 @@ import {
 	useCanvasGestures,
 	useDragProps,
 	usePanProps,
+	useTouchDrag,
 } from './drag-and-drop.ts';
 import { latestDefinitions, NodesCatalog } from './nodes-catalog.tsx';
 
@@ -336,8 +337,10 @@ function Canvas() {
 
 function Node({ id, definition, position }: Node) {
 	const { camera } = use(cameraContext);
+	const selectedNodeId = use(selectedNodeContext);
 	const setSelectedNode = use(setSelectedNodeContext);
 	const { setNodes } = use(nodesContext);
+	const nodeRef = useRef<HTMLDivElement>(null);
 	const setPosition = useCallback<Dispatch<SetStateAction<[number, number]>>>(
 		(positionUpdater) => {
 			setNodes?.((nodes) =>
@@ -357,9 +360,13 @@ function Node({ id, definition, position }: Node) {
 	);
 
 	const dragProps = useDragProps(setPosition, camera.zoom);
+	// On touch, only drag a node once it is selected; otherwise the touch
+	// falls through to the canvas and pans.
+	useTouchDrag(nodeRef, selectedNodeId === id, setPosition, camera.zoom);
 
 	return (
 		<div
+			ref={nodeRef}
 			data-node-id={id}
 			className="active:z-100 absolute flex items-center px-4 text-gray-500 border gap-6 h-12 border-gray-400/30 bg-white rounded-sm justify-between select-none"
 			style={{
@@ -383,7 +390,8 @@ function Node({ id, definition, position }: Node) {
 const ZOOM_STEP = 1.2;
 
 function ZoomWidget() {
-	const { camera, zoomBySelection, setZoom } = use(cameraContext);
+	const { camera, zoomBySelection, setZoom, resetView, zoomToFit } =
+		use(cameraContext);
 	const percent = Math.round(camera.zoom * 100);
 
 	return (
@@ -415,16 +423,21 @@ function ZoomWidget() {
 
 			<div className="flex border border-gray-400/30 bg-white rounded-sm  items-center overflow-clip">
 				<button
-					onClick={() => setZoom(1)}
-					aria-checked={percent === 100 ? true : undefined}
+					onClick={resetView}
+					title="Reset zoom"
+					aria-checked={
+						percent === 100 && camera.x === 0 && camera.y === 0
+							? true
+							: undefined
+					}
 					className="bg-white aria-checked:bg-blue-800/10 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<MaximizeIcon className="size-4" />
 				</button>
 				<button
-					onClick={() => setZoom(0.75)}
-					aria-checked={percent === 75 ? true : undefined}
-					className="bg-white aria-checked:bg-blue-800/10 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
+					onClick={zoomToFit}
+					title="Zoom to fit"
+					className="bg-white enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<FullscreenIcon className="size-4" />
 				</button>

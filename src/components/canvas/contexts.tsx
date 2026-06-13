@@ -58,6 +58,11 @@ type CameraControls = {
 	setZoom: (zoom: number) => void;
 	// Pan by a delta expressed in viewport pixels.
 	panBy: (dx: number, dy: number) => void;
+	// Reset zoom to 100% and panning back to the origin.
+	resetView: () => void;
+	// Fit all nodes within the visible viewport (excluding the sidebar),
+	// setting both zoom and panning.
+	zoomToFit: () => void;
 	viewportRef: RefObject<HTMLDivElement | null>;
 	sidebarRef: RefObject<HTMLDivElement | null>;
 };
@@ -71,6 +76,8 @@ export const cameraContext = createContext<CameraControls>({
 	zoomBySelection: noop,
 	setZoom: noop,
 	panBy: noop,
+	resetView: noop,
+	zoomToFit: noop,
 	viewportRef: { current: null },
 	sidebarRef: { current: null },
 });
@@ -188,6 +195,67 @@ export function CanvasProvider({ children }: PropsWithChildren) {
 		setCamera((cam) => ({ ...cam, x: cam.x + dx, y: cam.y + dy }));
 	}, []);
 
+	const resetView = useCallback(() => {
+		setCamera({ x: 0, y: 0, zoom: 1 });
+	}, []);
+
+	const zoomToFit = useCallback(() => {
+		const container = viewportRef.current;
+		if (!container) return;
+		const nodeElements = container.querySelectorAll('[data-node-id]');
+		if (nodeElements.length === 0) return;
+		const containerRect = container.getBoundingClientRect();
+
+		// Bounding box of all nodes, in viewport pixels relative to the canvas.
+		let minX = Infinity;
+		let minY = Infinity;
+		let maxX = -Infinity;
+		let maxY = -Infinity;
+		for (const node of nodeElements) {
+			const rect = node.getBoundingClientRect();
+			minX = Math.min(minX, rect.left - containerRect.left);
+			minY = Math.min(minY, rect.top - containerRect.top);
+			maxX = Math.max(maxX, rect.right - containerRect.left);
+			maxY = Math.max(maxY, rect.bottom - containerRect.top);
+		}
+
+		// Visible area: the viewport minus the sidebar, with some breathing room.
+		const sidebar = sidebarRef.current;
+		const visibleRight = sidebar
+			? sidebar.getBoundingClientRect().left - containerRect.left
+			: containerRect.width;
+		const padding = 64;
+		const availableWidth = visibleRight - padding * 2;
+		const availableHeight = containerRect.height - padding * 2;
+
+		setCamera((cam) => {
+			// Convert the screen-space box into canvas (content) coordinates.
+			const contentMinX = (minX - cam.x) / cam.zoom;
+			const contentMinY = (minY - cam.y) / cam.zoom;
+			const contentWidth = (maxX - minX) / cam.zoom;
+			const contentHeight = (maxY - minY) / cam.zoom;
+			if (contentWidth <= 0 || contentHeight <= 0) return cam;
+
+			const zoom = clamp(
+				Math.min(
+					availableWidth / contentWidth,
+					availableHeight / contentHeight,
+				),
+				MIN_ZOOM,
+				MAX_ZOOM,
+			);
+
+			// Centre the content within the visible area.
+			const contentCenterX = contentMinX + contentWidth / 2;
+			const contentCenterY = contentMinY + contentHeight / 2;
+			return {
+				zoom,
+				x: visibleRight / 2 - contentCenterX * zoom,
+				y: containerRect.height / 2 - contentCenterY * zoom,
+			};
+		});
+	}, []);
+
 	const camControls = useMemo<CameraControls>(
 		() => ({
 			camera,
@@ -195,10 +263,20 @@ export function CanvasProvider({ children }: PropsWithChildren) {
 			zoomBySelection,
 			setZoom,
 			panBy,
+			resetView,
+			zoomToFit,
 			viewportRef,
 			sidebarRef,
 		}),
-		[camera, zoomAtPoint, zoomBySelection, setZoom, panBy],
+		[
+			camera,
+			zoomAtPoint,
+			zoomBySelection,
+			setZoom,
+			panBy,
+			resetView,
+			zoomToFit,
+		],
 	);
 
 	return (

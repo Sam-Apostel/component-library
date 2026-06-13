@@ -72,6 +72,65 @@ export function usePanProps(panBy: (dx: number, dy: number) => void) {
 	};
 }
 
+// Drag a node with a single finger, but only while `enabled` (i.e. the node is
+// already selected). When enabled, the touch is stopped from bubbling so the
+// canvas pans/pinches; when disabled the hook attaches nothing, so touches fall
+// through to the canvas and pan it instead.
+export function useTouchDrag(
+	ref: RefObject<HTMLElement | null>,
+	enabled: boolean,
+	setPosition: Dispatch<SetStateAction<[number, number]>>,
+	zoom: number,
+) {
+	useEffect(() => {
+		const element = ref.current;
+		if (!element || !enabled) return;
+
+		let last: { x: number; y: number } | null = null;
+
+		const onTouchStart = (e: TouchEvent) => {
+			// Let multi-touch (pinch) bubble up to the canvas.
+			if (e.touches.length !== 1) return;
+			e.stopPropagation();
+			const touch = e.touches[0];
+			last = { x: touch.clientX, y: touch.clientY };
+		};
+
+		const onTouchMove = (e: TouchEvent) => {
+			if (!last || e.touches.length !== 1) return;
+			e.preventDefault();
+			e.stopPropagation();
+			const touch = e.touches[0];
+			// Movement is in viewport pixels; divide by zoom for canvas units.
+			const dx = (touch.clientX - last.x) / zoom;
+			const dy = (touch.clientY - last.y) / zoom;
+			setPosition((position) => [position[0] + dx, position[1] + dy]);
+			last = { x: touch.clientX, y: touch.clientY };
+		};
+
+		const onTouchEnd = (e: TouchEvent) => {
+			// Re-baseline to the finger that remains after a pinch ends so the
+			// drag continues smoothly; clear once nothing is touching.
+			const touch = e.touches.length === 1 ? e.touches[0] : null;
+			last = touch ? { x: touch.clientX, y: touch.clientY } : null;
+		};
+
+		element.addEventListener('touchstart', onTouchStart, {
+			passive: false,
+		});
+		element.addEventListener('touchmove', onTouchMove, { passive: false });
+		element.addEventListener('touchend', onTouchEnd);
+		element.addEventListener('touchcancel', onTouchEnd);
+
+		return () => {
+			element.removeEventListener('touchstart', onTouchStart);
+			element.removeEventListener('touchmove', onTouchMove);
+			element.removeEventListener('touchend', onTouchEnd);
+			element.removeEventListener('touchcancel', onTouchEnd);
+		};
+	}, [ref, enabled, setPosition, zoom]);
+}
+
 type Point = { x: number; y: number };
 type ZoomAtPoint = (factor: number, anchor: Point) => void;
 type PanBy = (dx: number, dy: number) => void;
