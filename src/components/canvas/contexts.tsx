@@ -5,6 +5,7 @@ import {
 	RefObject,
 	SetStateAction,
 	useCallback,
+	useEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -35,6 +36,10 @@ export const MAX_ZOOM = 4;
 
 const clamp = (value: number, min: number, max: number) =>
 	Math.min(max, Math.max(min, value));
+
+// Easing for the animated toolbar zoom transitions.
+const easeInOutCubic = (t: number) =>
+	t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 
 export type Camera = {
 	// Pan offset in viewport pixels.
@@ -123,45 +128,98 @@ export function CanvasProvider({ children }: PropsWithChildren) {
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const sidebarRef = useRef<HTMLDivElement>(null);
 
-	// Keep the latest selection available to the (stable) camera callbacks
-	// without making them depend on it.
+	// Keep the latest selection and camera available to the (stable) camera
+	// callbacks without making them depend on those values.
 	const selectedNodeRef = useRef(selectedNode);
 	selectedNodeRef.current = selectedNode;
+	const cameraRef = useRef(camera);
+	cameraRef.current = camera;
 
-	const zoomAtPoint = useCallback((factor: number, anchor: Point) => {
-		setCamera((cam) => {
-			const zoom = clamp(cam.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-			// Use the clamped zoom so the anchor stays fixed even at the limits.
-			const scale = zoom / cam.zoom;
-			return {
-				zoom,
-				x: anchor.x - (anchor.x - cam.x) * scale,
-				y: anchor.y - (anchor.y - cam.y) * scale,
-			};
-		});
+	// Handle of the running toolbar animation, if any.
+	const animationRef = useRef<number | null>(null);
+	const cancelAnimation = useCallback(() => {
+		if (animationRef.current !== null) {
+			cancelAnimationFrame(animationRef.current);
+			animationRef.current = null;
+		}
 	}, []);
+	// Stop any animation when the provider unmounts.
+	useEffect(() => cancelAnimation, [cancelAnimation]);
 
-	// The point (in viewport pixels) the zoom buttons should pivot around.
-	const getAnchor = useCallback((): Point => {
+	// Smoothly move the camera to `target` while holding the screen point
+	// `focus` fixed along the way (so a button zoom keeps its pivot put). Zoom
+	// is interpolated geometrically so it feels even at any scale; the focus
+	// point is interpolated in canvas space so pan and zoom blend together.
+	const animateCamera = useCallback(
+		(target: Camera, focus: Point) => {
+			cancelAnimation();
+			const start = cameraRef.current;
+
+			const reduceMotion = window.matchMedia?.(
+				'(prefers-reduced-motion: reduce)',
+			).matches;
+			if (reduceMotion) {
+				setCamera(target);
+				return;
+			}
+
+			// The focus point in canvas coords, under the start and end cameras.
+			const startFocusX = (focus.x - start.x) / start.zoom;
+			const startFocusY = (focus.y - start.y) / start.zoom;
+			const endFocusX = (focus.x - target.x) / target.zoom;
+			const endFocusY = (focus.y - target.y) / target.zoom;
+			const zoomRatio = target.zoom / start.zoom;
+
+			// Shorter for small hops, longer for big ones.
+			const duration = clamp(
+				180 + Math.abs(Math.log(zoomRatio)) * 140,
+				180,
+				420,
+			);
+
+			const t0 = performance.now();
+			const tick = (now: number) => {
+				const t = Math.min(1, (now - t0) / duration);
+				const e = easeInOutCubic(t);
+				const zoom = start.zoom * zoomRatio ** e;
+				const focusX = startFocusX + (endFocusX - startFocusX) * e;
+				const focusY = startFocusY + (endFocusY - startFocusY) * e;
+				setCamera({
+					zoom,
+					x: focus.x - focusX * zoom,
+					y: focus.y - focusY * zoom,
+				});
+				animationRef.current =
+					t < 1 ? requestAnimationFrame(tick) : null;
+			};
+			animationRef.current = requestAnimationFrame(tick);
+		},
+		[cancelAnimation],
+	);
+
+	const zoomAtPoint = useCallback(
+		(factor: number, anchor: Point) => {
+			// Direct gesture input takes over from any running animation.
+			cancelAnimation();
+			setCamera((cam) => {
+				const zoom = clamp(cam.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+				// Clamped zoom keeps the anchor fixed even at the limits.
+				const scale = zoom / cam.zoom;
+				return {
+					zoom,
+					x: anchor.x - (anchor.x - cam.x) * scale,
+					y: anchor.y - (anchor.y - cam.y) * scale,
+				};
+			});
+		},
+		[cancelAnimation],
+	);
+
+	// Centre of the visible viewport, excluding the sidebar on the right.
+	const getVisibleCenter = useCallback((): Point => {
 		const container = viewportRef.current;
 		if (!container) return { x: 0, y: 0 };
 		const containerRect = container.getBoundingClientRect();
-
-		const selectedId = selectedNodeRef.current;
-		if (selectedId !== null) {
-			const node = container.querySelector(
-				`[data-node-id="${selectedId}"]`,
-			);
-			if (node) {
-				const rect = node.getBoundingClientRect();
-				return {
-					x: rect.left + rect.width / 2 - containerRect.left,
-					y: rect.top + rect.height / 2 - containerRect.top,
-				};
-			}
-		}
-
-		// Centre of the visible viewport, excluding the sidebar on the right.
 		const sidebar = sidebarRef.current;
 		const visibleRight = sidebar
 			? sidebar.getBoundingClientRect().left - containerRect.left
@@ -169,14 +227,52 @@ export function CanvasProvider({ children }: PropsWithChildren) {
 		return { x: visibleRight / 2, y: containerRect.height / 2 };
 	}, []);
 
+	// The point (in viewport pixels) the zoom buttons pivot around: the selected
+	// node's centre, or the centre of the visible viewport.
+	const getAnchor = useCallback((): Point => {
+		const container = viewportRef.current;
+		const selectedId = selectedNodeRef.current;
+		if (container && selectedId !== null) {
+			const node = container.querySelector(
+				`[data-node-id="${selectedId}"]`,
+			);
+			if (node) {
+				const containerRect = container.getBoundingClientRect();
+				const rect = node.getBoundingClientRect();
+				return {
+					x: rect.left + rect.width / 2 - containerRect.left,
+					y: rect.top + rect.height / 2 - containerRect.top,
+				};
+			}
+		}
+		return getVisibleCenter();
+	}, [getVisibleCenter]);
+
+	// Multiply the zoom by `factor` around the current pivot, animated.
 	const zoomBySelection = useCallback(
-		(factor: number) => zoomAtPoint(factor, getAnchor()),
-		[zoomAtPoint, getAnchor],
+		(factor: number) => {
+			const anchor = getAnchor();
+			const start = cameraRef.current;
+			const zoom = clamp(start.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+			const scale = zoom / start.zoom;
+			animateCamera(
+				{
+					zoom,
+					x: anchor.x - (anchor.x - start.x) * scale,
+					y: anchor.y - (anchor.y - start.y) * scale,
+				},
+				anchor,
+			);
+		},
+		[getAnchor, animateCamera],
 	);
 
+	// Jump to an absolute zoom around the current pivot. Instant: this backs the
+	// % text field, where animating every keystroke would be jarring.
 	const setZoom = useCallback(
 		(zoom: number) => {
 			if (!Number.isFinite(zoom)) return;
+			cancelAnimation();
 			const anchor = getAnchor();
 			setCamera((cam) => {
 				const next = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
@@ -188,16 +284,20 @@ export function CanvasProvider({ children }: PropsWithChildren) {
 				};
 			});
 		},
-		[getAnchor],
+		[getAnchor, cancelAnimation],
 	);
 
-	const panBy = useCallback((dx: number, dy: number) => {
-		setCamera((cam) => ({ ...cam, x: cam.x + dx, y: cam.y + dy }));
-	}, []);
+	const panBy = useCallback(
+		(dx: number, dy: number) => {
+			cancelAnimation();
+			setCamera((cam) => ({ ...cam, x: cam.x + dx, y: cam.y + dy }));
+		},
+		[cancelAnimation],
+	);
 
 	const resetView = useCallback(() => {
-		setCamera({ x: 0, y: 0, zoom: 1 });
-	}, []);
+		animateCamera({ x: 0, y: 0, zoom: 1 }, getVisibleCenter());
+	}, [animateCamera, getVisibleCenter]);
 
 	const zoomToFit = useCallback(() => {
 		const container = viewportRef.current;
@@ -228,33 +328,32 @@ export function CanvasProvider({ children }: PropsWithChildren) {
 		const availableWidth = visibleRight - padding * 2;
 		const availableHeight = containerRect.height - padding * 2;
 
-		setCamera((cam) => {
-			// Convert the screen-space box into canvas (content) coordinates.
-			const contentMinX = (minX - cam.x) / cam.zoom;
-			const contentMinY = (minY - cam.y) / cam.zoom;
-			const contentWidth = (maxX - minX) / cam.zoom;
-			const contentHeight = (maxY - minY) / cam.zoom;
-			if (contentWidth <= 0 || contentHeight <= 0) return cam;
+		// Convert the screen-space box into canvas coords with the live camera.
+		const start = cameraRef.current;
+		const contentWidth = (maxX - minX) / start.zoom;
+		const contentHeight = (maxY - minY) / start.zoom;
+		if (contentWidth <= 0 || contentHeight <= 0) return;
+		const contentCenterX = (minX - start.x) / start.zoom + contentWidth / 2;
+		const contentCenterY =
+			(minY - start.y) / start.zoom + contentHeight / 2;
 
-			const zoom = clamp(
-				Math.min(
-					availableWidth / contentWidth,
-					availableHeight / contentHeight,
-				),
-				MIN_ZOOM,
-				MAX_ZOOM,
-			);
-
-			// Centre the content within the visible area.
-			const contentCenterX = contentMinX + contentWidth / 2;
-			const contentCenterY = contentMinY + contentHeight / 2;
-			return {
+		const zoom = clamp(
+			Math.min(
+				availableWidth / contentWidth,
+				availableHeight / contentHeight,
+			),
+			MIN_ZOOM,
+			MAX_ZOOM,
+		);
+		animateCamera(
+			{
 				zoom,
 				x: visibleRight / 2 - contentCenterX * zoom,
 				y: containerRect.height / 2 - contentCenterY * zoom,
-			};
-		});
-	}, []);
+			},
+			getVisibleCenter(),
+		);
+	}, [animateCamera, getVisibleCenter]);
 
 	const camControls = useMemo<CameraControls>(
 		() => ({
