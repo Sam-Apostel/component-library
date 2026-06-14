@@ -15,6 +15,8 @@ import {
 	SetStateAction,
 	use,
 	useCallback,
+	useEffect,
+	useReducer,
 	useRef,
 	useState,
 } from 'react';
@@ -458,15 +460,91 @@ function ZoomWidget() {
 }
 
 function Minimap() {
-	// TODO: read nodes from context to display minimap
-	// TODO: get window bounding box coordinates to display viewport outline
-	// TODO: control position by clicking and dragging on minimap
+	const { camera, viewportRef } = use(cameraContext);
+	const { nodes } = use(nodesContext);
+
+	// Re-measure after mount (refs are attached on commit) and on resize; pan
+	// and zoom already re-render this via the camera context.
+	const [, refresh] = useReducer((n: number) => n + 1, 0);
+	useEffect(() => {
+		refresh();
+		window.addEventListener('resize', refresh);
+		return () => window.removeEventListener('resize', refresh);
+	}, []);
+
+	const container = viewportRef.current;
+
+	// Node rectangles in canvas units (measured size, falling back to a default).
+	const nodeRects = (nodes ?? []).map((node) => {
+		const rect = container
+			?.querySelector(`[data-node-id="${node.id}"]`)
+			?.getBoundingClientRect();
+		return {
+			id: node.id,
+			x: node.position[0],
+			y: node.position[1],
+			width: rect ? rect.width / camera.zoom : 176,
+			height: rect ? rect.height / camera.zoom : 48,
+		};
+	});
+
+	// The visible viewport, also in canvas units.
+	const containerRect = container?.getBoundingClientRect();
+	const viewport = containerRect
+		? {
+				x: -camera.x / camera.zoom,
+				y: -camera.y / camera.zoom,
+				width: containerRect.width / camera.zoom,
+				height: containerRect.height / camera.zoom,
+			}
+		: null;
+
+	// World bounding box (nodes + viewport) with a little padding.
+	const boxes = viewport ? [...nodeRects, viewport] : nodeRects;
+	const minX = boxes.length ? Math.min(...boxes.map((b) => b.x)) : 0;
+	const minY = boxes.length ? Math.min(...boxes.map((b) => b.y)) : 0;
+	const maxX = boxes.length
+		? Math.max(...boxes.map((b) => b.x + b.width))
+		: 100;
+	const maxY = boxes.length
+		? Math.max(...boxes.map((b) => b.y + b.height))
+		: 100;
+	const padding = Math.max(maxX - minX, maxY - minY) * 0.08 + 24;
+	const viewBox = `${minX - padding} ${minY - padding} ${
+		maxX - minX + padding * 2
+	} ${maxY - minY + padding * 2}`;
+
 	return (
-		<div className="h-32 border border-gray-400/30 bg-white rounded-sm ">
-			<div
-				className="bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] w-full h-full"
-				style={{ zoom: 0.5 }}
-			></div>
+		<div className="h-32 border border-gray-400/30 bg-white rounded-sm overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+			<svg
+				className="w-full h-full"
+				viewBox={viewBox}
+				preserveAspectRatio="xMidYMid meet"
+				aria-hidden="true"
+			>
+				{nodeRects.map((rect) => (
+					<rect
+						key={rect.id}
+						x={rect.x}
+						y={rect.y}
+						width={rect.width}
+						height={rect.height}
+						rx={6}
+						className="fill-gray-400/70"
+					/>
+				))}
+				{viewport && (
+					<rect
+						x={viewport.x}
+						y={viewport.y}
+						width={viewport.width}
+						height={viewport.height}
+						className="fill-gray-500/10 stroke-gray-500/70"
+						strokeWidth={1}
+						vectorEffect="non-scaling-stroke"
+					/>
+				)}
+			</svg>
 		</div>
 	);
 }
