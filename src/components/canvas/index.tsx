@@ -10,45 +10,70 @@ import {
 	PlusIcon,
 	TrashIcon,
 } from 'lucide-react';
-import { Dispatch, SetStateAction, use, useCallback, useState } from 'react';
+import {
+	Dispatch,
+	SetStateAction,
+	use,
+	useCallback,
+	useEffect,
+	useReducer,
+	useRef,
+	useState,
+} from 'react';
 import { Button } from './button.tsx';
 import {
 	CanvasProvider,
+	cameraContext,
+	MAX_ZOOM,
+	MIN_ZOOM,
 	type Node,
 	NodeDefinition,
 	nodesContext,
 	selectedNodeContext,
 	setSelectedNodeContext,
-	setZoomContext,
-	zoomContext,
 } from './contexts.tsx';
-import { useDragProps } from './drag-and-drop.ts';
+import {
+	useCanvasGestures,
+	useDragProps,
+	usePanProps,
+	useTouchDrag,
+} from './drag-and-drop.ts';
 import { latestDefinitions, NodesCatalog } from './nodes-catalog.tsx';
 
 export default function CanvasUi() {
 	return (
 		<CanvasProvider>
-			<div className="w-full h-screen relative overflow-hidden">
-				<Canvas />
-				<aside className="absolute right-2 inset-y-2 flex flex-col gap-2">
-					<div className="flex items-center gap-2">
-						<Button variant="primary" className="flex-1">
-							Save
-						</Button>
-						<Button
-							variant="secondary"
-							className="aspect-square px-0"
-						>
-							<EyeIcon className="size-4" />
-						</Button>
-					</div>
-					<NodesCatalog />
-					<OperationParameters />
-					<Minimap />
-					<ZoomWidget />
-				</aside>
-			</div>
+			<CanvasLayout />
 		</CanvasProvider>
+	);
+}
+
+function CanvasLayout() {
+	const { viewportRef, sidebarRef } = use(cameraContext);
+	return (
+		<div
+			ref={viewportRef}
+			className="w-full h-screen relative overflow-hidden"
+		>
+			<Canvas />
+			<aside
+				ref={sidebarRef}
+				className="absolute right-2 inset-y-2 flex flex-col gap-2"
+			>
+				<div className="flex items-center gap-2">
+					<Button variant="primary" className="flex-1">
+						Save
+					</Button>
+					<Button variant="secondary" className="aspect-square px-0">
+						<EyeIcon className="size-4" />
+					</Button>
+				</div>
+				<NodesCatalog />
+				<OperationParameters />
+				<Minimap />
+				<ZoomWidget />
+			</aside>
+		</div>
 	);
 }
 
@@ -276,56 +301,45 @@ function UpgradeSideBar({
 	);
 }
 
+// Half-size of the dotted grid plane, in canvas units. Large enough to read as
+// infinite for any realistic pan/zoom.
+const GRID_EXTENT = 50000;
+
 function Canvas() {
-	const zoom = use(zoomContext);
-	const setZoom = use(setZoomContext);
+	const { camera, zoomAtPoint, panBy } = use(cameraContext);
 	const setSelectedNode = use(setSelectedNodeContext);
-	const [position, setPosition] = useState<[number, number]>([0, 0]);
-
-	const dragProps = useDragProps(setPosition, zoom);
-
 	const { nodes } = use(nodesContext);
+	const canvasRef = useRef<HTMLDivElement>(null);
+
+	const panProps = usePanProps(panBy);
+
+	// Mouse wheel, trackpad pinch/swipe and touch gestures.
+	useCanvasGestures(canvasRef, zoomAtPoint, panBy);
+
 	return (
 		<div
-			className="absolute cursor-grab active:cursor-grabbing -inset-4 bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
-			style={{
-				zoom: zoom / 100,
-				translate: `${position[0] % 16}px ${position[1] % 16}px`,
-			}}
-			{...dragProps}
+			ref={canvasRef}
+			className="absolute inset-0 cursor-grab active:cursor-grabbing bg-white"
+			{...panProps}
 			onClick={() => setSelectedNode(null)}
-			onWheel={(e) => {
-				const mousePos = {
-					x: e.clientX / (zoom / 100),
-					y: e.clientY / (zoom / 100),
-				};
-				// find mouse position relative to canvas
-				setZoom((zoom) => {
-					const newZoom = Math.max(
-						20,
-						Math.min(150, zoom + e.deltaY),
-					);
-
-					setPosition((position) => [
-						position[0] +
-							mousePos.x -
-							(newZoom / zoom) * mousePos.x,
-						position[1] +
-							mousePos.y -
-							(newZoom / zoom) * mousePos.y,
-					]);
-
-					return newZoom;
-				});
-				// restore mouse position relative to canvas
-			}}
 		>
 			<div
-				className="relative"
+				className="absolute top-0 left-0 origin-top-left"
 				style={{
-					translate: `${position[0] - (position[0] % 16)}px ${position[1] - (position[1] % 16)}px`,
+					transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
+					willChange: 'transform',
 				}}
 			>
+				{/*
+				 * The dotted grid lives inside the node transform as a large
+				 * plane tiled in canvas units, so it scales and slides exactly
+				 * like the nodes (no separate transform math to drift). The
+				 * shared layer is composited, so panning slides a cached bitmap.
+				 */}
+				<div
+					className="absolute pointer-events-none bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
+					style={{ inset: `${-GRID_EXTENT}px` }}
+				/>
 				{nodes?.map((node) => (
 					<Node key={node.id} {...node} />
 				))}
@@ -335,9 +349,11 @@ function Canvas() {
 }
 
 function Node({ id, definition, position }: Node) {
-	const zoom = use(zoomContext);
+	const { camera } = use(cameraContext);
+	const selectedNodeId = use(selectedNodeContext);
 	const setSelectedNode = use(setSelectedNodeContext);
 	const { setNodes } = use(nodesContext);
+	const nodeRef = useRef<HTMLDivElement>(null);
 	const setPosition = useCallback<Dispatch<SetStateAction<[number, number]>>>(
 		(positionUpdater) => {
 			setNodes?.((nodes) =>
@@ -356,10 +372,15 @@ function Node({ id, definition, position }: Node) {
 		[setNodes, id],
 	);
 
-	const dragProps = useDragProps(setPosition, zoom);
+	const dragProps = useDragProps(setPosition, camera.zoom);
+	// On touch, only drag a node once it is selected; otherwise the touch
+	// falls through to the canvas and pans.
+	useTouchDrag(nodeRef, selectedNodeId === id, setPosition, camera.zoom);
 
 	return (
 		<div
+			ref={nodeRef}
+			data-node-id={id}
 			className="active:z-100 absolute flex items-center px-4 text-gray-500 border gap-6 h-12 border-gray-400/30 bg-white rounded-sm justify-between select-none"
 			style={{
 				left: position[0],
@@ -377,19 +398,21 @@ function Node({ id, definition, position }: Node) {
 	);
 }
 
-function ZoomWidget() {
-	const zoom = use(zoomContext);
-	const setZoom = use(setZoomContext);
+// Each step multiplies the zoom by this factor so the buttons feel
+// proportional at every zoom level.
+const ZOOM_STEP = 1.2;
 
-	// TODO: correct position after zoom
-	// TODO: zoom to fit based on node positions and viewport size
+function ZoomWidget() {
+	const { camera, zoomBySelection, setZoom, resetView, zoomToFit } =
+		use(cameraContext);
+	const percent = Math.round(camera.zoom * 100);
 
 	return (
 		<div className="flex gap-2 items-center">
 			<div className="flex gap-2 items-center">
 				<button
-					onClick={() => setZoom((z) => z - 10)}
-					disabled={zoom <= 20}
+					onClick={() => zoomBySelection(1 / ZOOM_STEP)}
+					disabled={camera.zoom <= MIN_ZOOM}
 					className="disabled:opacity-50 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 border border-gray-400/30 bg-white rounded-sm h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<MinusIcon className="size-4" />
@@ -397,14 +420,14 @@ function ZoomWidget() {
 				<div className="flex gap-2 border border-gray-400/30 bg-white rounded-sm h-10 pl-2 pr-3 items-center text-sm text-gray-500">
 					<input
 						className="w-8 text-right"
-						value={zoom}
-						onChange={(e) => setZoom(+e.target.value)}
+						value={percent}
+						onChange={(e) => setZoom(+e.target.value / 100)}
 					/>
 					%
 				</div>
 				<button
-					onClick={() => setZoom((z) => z + 10)}
-					disabled={zoom >= 150}
+					onClick={() => zoomBySelection(ZOOM_STEP)}
+					disabled={camera.zoom >= MAX_ZOOM}
 					className="disabled:opacity-50 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 border border-gray-400/30 bg-white rounded-sm h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<PlusIcon className="size-4" />
@@ -413,16 +436,21 @@ function ZoomWidget() {
 
 			<div className="flex border border-gray-400/30 bg-white rounded-sm  items-center overflow-clip">
 				<button
-					onClick={() => setZoom(100)}
-					aria-checked={zoom === 100 ? true : undefined}
+					onClick={resetView}
+					title="Reset zoom"
+					aria-checked={
+						percent === 100 && camera.x === 0 && camera.y === 0
+							? true
+							: undefined
+					}
 					className="bg-white aria-checked:bg-blue-800/10 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<MaximizeIcon className="size-4" />
 				</button>
 				<button
-					onClick={() => setZoom(75)}
-					aria-checked={zoom === 75 ? true : undefined}
-					className="bg-white aria-checked:bg-blue-800/10 enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
+					onClick={zoomToFit}
+					title="Zoom to fit"
+					className="bg-white enabled:cursor-pointer enabled:hover:bg-gray-100 enabled:active:hover:bg-gray-200/80 enabled:active:scale-98 aspect-square justify-center flex gap-2 h-10 px-2 items-center text-sm text-gray-500"
 				>
 					<FullscreenIcon className="size-4" />
 				</button>
@@ -432,15 +460,93 @@ function ZoomWidget() {
 }
 
 function Minimap() {
-	// TODO: read nodes from context to display minimap
-	// TODO: get window bounding box coordinates to display viewport outline
-	// TODO: control position by clicking and dragging on minimap
+	const { camera, viewportRef } = use(cameraContext);
+	const { nodes } = use(nodesContext);
+
+	// Re-measure after mount (refs are attached on commit) and on resize; pan
+	// and zoom already re-render this via the camera context.
+	const [, refresh] = useReducer((n: number) => n + 1, 0);
+	useEffect(() => {
+		refresh();
+		window.addEventListener('resize', refresh);
+		return () => window.removeEventListener('resize', refresh);
+	}, []);
+
+	const container = viewportRef.current;
+
+	// Node rectangles in canvas units. offsetWidth/Height report the layout size
+	// (unaffected by the CSS transform), so this stays correct even right after
+	// a big zoom jump, unlike a getBoundingClientRect that lags one frame.
+	const nodeRects = (nodes ?? []).map((node) => {
+		const el = container?.querySelector<HTMLElement>(
+			`[data-node-id="${node.id}"]`,
+		);
+		return {
+			id: node.id,
+			x: node.position[0],
+			y: node.position[1],
+			width: el ? el.offsetWidth : 176,
+			height: el ? el.offsetHeight : 48,
+		};
+	});
+
+	// The visible viewport, also in canvas units.
+	const containerRect = container?.getBoundingClientRect();
+	const viewport = containerRect
+		? {
+				x: -camera.x / camera.zoom,
+				y: -camera.y / camera.zoom,
+				width: containerRect.width / camera.zoom,
+				height: containerRect.height / camera.zoom,
+			}
+		: null;
+
+	// World bounding box (nodes + viewport) with a little padding.
+	const boxes = viewport ? [...nodeRects, viewport] : nodeRects;
+	const minX = boxes.length ? Math.min(...boxes.map((b) => b.x)) : 0;
+	const minY = boxes.length ? Math.min(...boxes.map((b) => b.y)) : 0;
+	const maxX = boxes.length
+		? Math.max(...boxes.map((b) => b.x + b.width))
+		: 100;
+	const maxY = boxes.length
+		? Math.max(...boxes.map((b) => b.y + b.height))
+		: 100;
+	const padding = Math.max(maxX - minX, maxY - minY) * 0.08 + 24;
+	const viewBox = `${minX - padding} ${minY - padding} ${
+		maxX - minX + padding * 2
+	} ${maxY - minY + padding * 2}`;
+
 	return (
-		<div className="h-32 border border-gray-400/30 bg-white rounded-sm ">
-			<div
-				className="bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] w-full h-full"
-				style={{ zoom: 0.5 }}
-			></div>
+		<div className="h-32 border border-gray-400/30 bg-white rounded-sm overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+			<svg
+				className="w-full h-full"
+				viewBox={viewBox}
+				preserveAspectRatio="xMidYMid meet"
+				aria-hidden="true"
+			>
+				{nodeRects.map((rect) => (
+					<rect
+						key={rect.id}
+						x={rect.x}
+						y={rect.y}
+						width={rect.width}
+						height={rect.height}
+						rx={6}
+						className="fill-gray-400/70"
+					/>
+				))}
+				{viewport && (
+					<rect
+						x={viewport.x}
+						y={viewport.y}
+						width={viewport.width}
+						height={viewport.height}
+						className="fill-gray-500/10 stroke-gray-500/70"
+						strokeWidth={1}
+						vectorEffect="non-scaling-stroke"
+					/>
+				)}
+			</svg>
 		</div>
 	);
 }
