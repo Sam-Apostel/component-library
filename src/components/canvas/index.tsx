@@ -474,17 +474,19 @@ function Minimap() {
 
 	const container = viewportRef.current;
 
-	// Node rectangles in canvas units (measured size, falling back to a default).
+	// Node rectangles in canvas units. offsetWidth/Height report the layout size
+	// (unaffected by the CSS transform), so this stays correct even right after
+	// a big zoom jump, unlike a getBoundingClientRect that lags one frame.
 	const nodeRects = (nodes ?? []).map((node) => {
-		const rect = container
-			?.querySelector(`[data-node-id="${node.id}"]`)
-			?.getBoundingClientRect();
+		const el = container?.querySelector<HTMLElement>(
+			`[data-node-id="${node.id}"]`,
+		);
 		return {
 			id: node.id,
 			x: node.position[0],
 			y: node.position[1],
-			width: rect ? rect.width / camera.zoom : 176,
-			height: rect ? rect.height / camera.zoom : 48,
+			width: el ? el.offsetWidth : 176,
+			height: el ? el.offsetHeight : 48,
 		};
 	});
 
