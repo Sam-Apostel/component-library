@@ -299,6 +299,10 @@ function UpgradeSideBar({
 	);
 }
 
+// Half-size of the dotted grid plane, in canvas units. Large enough to read as
+// infinite for any realistic pan/zoom.
+const GRID_EXTENT = 50000;
+
 function Canvas() {
 	const { camera, zoomAtPoint, panBy } = use(cameraContext);
 	const setSelectedNode = use(setSelectedNodeContext);
@@ -310,12 +314,6 @@ function Canvas() {
 	// Mouse wheel, trackpad pinch/swipe and touch gestures.
 	useCanvasGestures(canvasRef, zoomAtPoint, panBy);
 
-	// One grid tile in viewport pixels. The grid layer is inset by the largest
-	// possible tile so its size never changes (only its transform does), letting
-	// the compositor slide a cached bitmap instead of relayouting/repainting.
-	const tile = 16 * camera.zoom;
-	const gridMargin = 16 * MAX_ZOOM;
-
 	return (
 		<div
 			ref={canvasRef}
@@ -323,22 +321,6 @@ function Canvas() {
 			{...panProps}
 			onClick={() => setSelectedNode(null)}
 		>
-			{/*
-			 * Dotted grid on its own composited layer so it pans in lockstep
-			 * with the nodes. The pattern is periodic, so translating by the pan
-			 * offset modulo one tile reproduces an infinite grid with a tiny,
-			 * cheap transform. `will-change` keeps the dots rasterised once and
-			 * merely slid by the compositor (no per-frame repaint => no shimmer).
-			 */}
-			<div
-				className="absolute pointer-events-none bg-[radial-gradient(#e5e7eb_1px,transparent_1px)]"
-				style={{
-					inset: `${-gridMargin}px`,
-					backgroundSize: `${tile}px ${tile}px`,
-					transform: `translate(${camera.x % tile}px, ${camera.y % tile}px)`,
-					willChange: 'transform',
-				}}
-			/>
 			<div
 				className="absolute top-0 left-0 origin-top-left"
 				style={{
@@ -346,6 +328,16 @@ function Canvas() {
 					willChange: 'transform',
 				}}
 			>
+				{/*
+				 * The dotted grid lives inside the node transform as a large
+				 * plane tiled in canvas units, so it scales and slides exactly
+				 * like the nodes (no separate transform math to drift). The
+				 * shared layer is composited, so panning slides a cached bitmap.
+				 */}
+				<div
+					className="absolute pointer-events-none bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
+					style={{ inset: `${-GRID_EXTENT}px` }}
+				/>
 				{nodes?.map((node) => (
 					<Node key={node.id} {...node} />
 				))}
