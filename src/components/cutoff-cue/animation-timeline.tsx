@@ -1,6 +1,6 @@
 import { cn } from '../../util';
 import { DemoBody, DemoHeader, frameClasses, headerClasses } from './demo';
-import './shy-border.css';
+import './cutoff-cue.css';
 
 /**
  * Scroll-driven animation (Chrome 115+): the scroll container exposes a named
@@ -9,12 +9,12 @@ import './shy-border.css';
  * progressive — dragging slowly fades the border in and out with the scroll
  * position itself.
  */
-export default function ShyBorderAnimationTimeline() {
+export default function CutoffCueAnimationTimeline() {
 	return (
-		<div className={cn(frameClasses, 'shy-timeline-scroller')}>
+		<div className={cn(frameClasses, 'cutoff-cue-timeline-scroller')}>
 			<div className={headerClasses}>
 				<DemoHeader />
-				<div className="shy-timeline-border absolute inset-x-0 bottom-0 h-px bg-stone-700" />
+				<div className="cutoff-cue-timeline-border absolute inset-x-0 bottom-0 h-px bg-stone-700" />
 			</div>
 			<DemoBody />
 		</div>

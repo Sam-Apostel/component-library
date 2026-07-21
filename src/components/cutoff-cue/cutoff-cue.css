@@ -1,18 +1,18 @@
 /* Variant: scroll-state container query (Chrome 133+).
    The sticky header becomes a scroll-state container, so descendants can
    query whether it is actually pinned via scroll-state(stuck: top). */
-.shy-scroll-state-header {
+.cutoff-cue-scroll-state-header {
 	container-type: scroll-state;
-	container-name: shy-header;
+	container-name: cutoff-cue-header;
 }
 
-.shy-scroll-state-border {
+.cutoff-cue-scroll-state-border {
 	opacity: 0;
 	transition: opacity 250ms ease-in-out;
 }
 
-@container shy-header scroll-state(stuck: top) {
-	.shy-scroll-state-border {
+@container cutoff-cue-header scroll-state(stuck: top) {
+	.cutoff-cue-scroll-state-border {
 		opacity: 1;
 	}
 }
@@ -20,17 +20,17 @@
 /* Variant: scroll-driven animation (Chrome 115+).
    The scroll container publishes a named timeline; the border plays a
    fade-in keyframe scrubbed by the first 3rem of scroll distance. */
-.shy-timeline-scroller {
-	scroll-timeline: --shy-scroller y;
+.cutoff-cue-timeline-scroller {
+	scroll-timeline: --cutoff-cue-scroller y;
 }
 
-.shy-timeline-border {
-	animation: shy-border-reveal linear both;
-	animation-timeline: --shy-scroller;
+.cutoff-cue-timeline-border {
+	animation: cutoff-cue-reveal linear both;
+	animation-timeline: --cutoff-cue-scroller;
 	animation-range: 0rem 3rem;
 }
 
-@keyframes shy-border-reveal {
+@keyframes cutoff-cue-reveal {
 	from {
 		opacity: 0;
 	}

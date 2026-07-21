@@ -8,7 +8,7 @@ import { DemoBody, DemoHeader, frameClasses, headerClasses } from './demo';
  * sentinel is no longer fully visible — i.e. the header is stuck. No work per
  * scroll frame; the callback only fires on the transition.
  */
-export default function ShyBorderIntersectionObserver() {
+export default function CutoffCueIntersectionObserver() {
 	const scrollerRef = useRef<HTMLDivElement>(null);
 	const sentinelRef = useRef<HTMLDivElement>(null);
 	const [stuck, setStuck] = useState(false);

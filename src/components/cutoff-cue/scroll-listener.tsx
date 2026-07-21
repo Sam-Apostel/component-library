@@ -7,7 +7,7 @@ import { DemoBody, DemoHeader, frameClasses, headerClasses } from './demo';
  * scrolled at all. Works everywhere, but the state flip happens on the main
  * thread, so the border can lag a frame behind a fast fling.
  */
-export default function ShyBorderScrollListener() {
+export default function CutoffCueScrollListener() {
 	const [stuck, setStuck] = useState(false);
 
 	return (

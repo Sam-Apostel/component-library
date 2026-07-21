@@ -29,10 +29,10 @@ export function DemoBody() {
 				while scrolling.
 			</p>
 			<p>
-				So the border should be shy. At rest it stays hidden and a
-				single gap does its job. The moment content starts sliding under
-				the header, the border shows up to give the clipped edge a
-				reason to be there.
+				So the border should only exist when the cutoff does. At rest it
+				stays hidden and a single gap does its job. The moment content
+				starts sliding under the header, the border shows up as a cue
+				that the clipped edge is intentional.
 			</p>
 			<p>
 				Scroll this card and watch the line appear at the bottom of the

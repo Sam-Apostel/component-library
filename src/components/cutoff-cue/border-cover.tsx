@@ -12,7 +12,7 @@ import { DemoBody, DemoHeader, frameClasses, headerClasses } from './demo';
  * sticky border (10), scrolling content. Both border and cover use a
  * negative bottom margin so neither takes up layout space.
  */
-export default function ShyBorderCoverTrick() {
+export default function CutoffCueCoverTrick() {
 	return (
 		<div className={frameClasses}>
 			<div className={cn(headerClasses, 'z-30')}>

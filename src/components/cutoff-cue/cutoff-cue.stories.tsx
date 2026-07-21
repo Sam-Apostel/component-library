@@ -1,14 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import Component, {
-	ShyBorderAnimationTimeline,
-	ShyBorderCoverTrick,
-	ShyBorderIntersectionObserver,
-	ShyBorderScrollListener,
-	ShyBorderScrollState,
+	CutoffCueAnimationTimeline,
+	CutoffCueCoverTrick,
+	CutoffCueIntersectionObserver,
+	CutoffCueScrollListener,
+	CutoffCueScrollState,
 } from './index';
 
 const meta = {
-	title: 'Components/shy border',
+	title: 'Components/cutoff cue',
 	component: Component,
 	parameters: {
 		layout: 'centered',
@@ -34,7 +34,7 @@ export const ScrollStateContainerQuery: Story = {
 			},
 		},
 	},
-	render: () => <ShyBorderScrollState />,
+	render: () => <CutoffCueScrollState />,
 };
 
 export const ScrollDrivenAnimation: Story = {
@@ -45,7 +45,7 @@ export const ScrollDrivenAnimation: Story = {
 			},
 		},
 	},
-	render: () => <ShyBorderAnimationTimeline />,
+	render: () => <CutoffCueAnimationTimeline />,
 };
 
 export const ScrollListener: Story = {
@@ -56,7 +56,7 @@ export const ScrollListener: Story = {
 			},
 		},
 	},
-	render: () => <ShyBorderScrollListener />,
+	render: () => <CutoffCueScrollListener />,
 };
 
 export const IntersectionObserverSentinel: Story = {
@@ -67,7 +67,7 @@ export const IntersectionObserverSentinel: Story = {
 			},
 		},
 	},
-	render: () => <ShyBorderIntersectionObserver />,
+	render: () => <CutoffCueIntersectionObserver />,
 };
 
 export const BorderCover: Story = {
@@ -78,5 +78,5 @@ export const BorderCover: Story = {
 			},
 		},
 	},
-	render: () => <ShyBorderCoverTrick />,
+	render: () => <CutoffCueCoverTrick />,
 };
