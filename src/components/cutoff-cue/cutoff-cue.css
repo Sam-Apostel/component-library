@@ -1,0 +1,40 @@
+/* Variant: scroll-state container query (Chrome 133+).
+   The sticky header becomes a scroll-state container, so descendants can
+   query whether it is actually pinned via scroll-state(stuck: top). */
+.cutoff-cue-scroll-state-header {
+	container-type: scroll-state;
+	container-name: cutoff-cue-header;
+}
+
+.cutoff-cue-scroll-state-border {
+	opacity: 0;
+	transition: opacity 250ms ease-in-out;
+}
+
+@container cutoff-cue-header scroll-state(stuck: top) {
+	.cutoff-cue-scroll-state-border {
+		opacity: 1;
+	}
+}
+
+/* Variant: scroll-driven animation (Chrome 115+).
+   The scroll container publishes a named timeline; the border plays a
+   fade-in keyframe scrubbed by the first 3rem of scroll distance. */
+.cutoff-cue-timeline-scroller {
+	scroll-timeline: --cutoff-cue-scroller y;
+}
+
+.cutoff-cue-timeline-border {
+	animation: cutoff-cue-reveal linear both;
+	animation-timeline: --cutoff-cue-scroller;
+	animation-range: 0rem 3rem;
+}
+
+@keyframes cutoff-cue-reveal {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
