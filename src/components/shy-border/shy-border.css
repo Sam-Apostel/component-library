@@ -1,0 +1,40 @@
+/* Variant: scroll-state container query (Chrome 133+).
+   The sticky header becomes a scroll-state container, so descendants can
+   query whether it is actually pinned via scroll-state(stuck: top). */
+.shy-scroll-state-header {
+	container-type: scroll-state;
+	container-name: shy-header;
+}
+
+.shy-scroll-state-border {
+	opacity: 0;
+	transition: opacity 250ms ease-in-out;
+}
+
+@container shy-header scroll-state(stuck: top) {
+	.shy-scroll-state-border {
+		opacity: 1;
+	}
+}
+
+/* Variant: scroll-driven animation (Chrome 115+).
+   The scroll container publishes a named timeline; the border plays a
+   fade-in keyframe scrubbed by the first 3rem of scroll distance. */
+.shy-timeline-scroller {
+	scroll-timeline: --shy-scroller y;
+}
+
+.shy-timeline-border {
+	animation: shy-border-reveal linear both;
+	animation-timeline: --shy-scroller;
+	animation-range: 0rem 3rem;
+}
+
+@keyframes shy-border-reveal {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
